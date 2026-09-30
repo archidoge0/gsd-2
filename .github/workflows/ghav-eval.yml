@@ -1,0 +1,35 @@
+name: GHAV GSD lint timing
+
+on:
+  push:
+    branches:
+      - 'codex/ghav-gsd-*'
+
+permissions:
+  contents: read
+
+jobs:
+  no-gsd-dir:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Ensure .gsd/ is not checked in
+        run: |
+          if [ -d ".gsd" ]; then
+            echo "::error::.gsd/ directory must not be checked in"
+            exit 1
+          fi
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Validate skill references
+        run: node scripts/check-skill-references.mjs
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Scan for hardcoded secrets
+        run: bash scripts/secret-scan.sh --diff d3ace49980e83e99418661f4eba002001f594f91
