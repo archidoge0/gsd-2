@@ -1,0 +1,84 @@
+name: GHAV GSD 4093 build integration core
+on:
+  push:
+    branches:
+      - 'codex/ghav-gsd4093-*'
+permissions:
+  contents: read
+jobs:
+  build:
+    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install web host dependencies
+        run: npm --prefix web ci
+
+      - name: Cache Next.js build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-${{ hashFiles('web/app/**', 'web/components/**', 'web/lib/**', 'web/hooks/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+
+      - name: Build
+        run: npm run build
+
+      - name: Build web host
+        run: npm run build:web-host
+
+      - name: Typecheck extensions
+        run: npm run typecheck:extensions
+
+      - name: Validate package is installable
+        run: npm run validate-pack
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Run package tests
+        run: npm run test:packages
+
+      - name: Check test coverage thresholds
+        run: npm run test:coverage
+
+  integration-tests:
+    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install web host dependencies
+        run: npm --prefix web ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Run integration tests
+        run: npm run test:integration
+
