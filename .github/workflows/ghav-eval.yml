@@ -1,0 +1,30 @@
+# Fixed lint-only push harness for gsd-build/gsd-2#1700.
+# The complete pinned task tree comes from aea00bfabf92509bc81d280cc76d10cf113103d7.
+name: GHAV gsd1700 lint
+on:
+  push:
+    branches:
+      - 'codex/ghav-gsd1700-*'
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Scan for hardcoded secrets
+        run: bash scripts/secret-scan.sh --diff origin/codex/ghav-gsd1700-base
+      - name: Ensure .gsd/ is not checked in
+        run: |
+          if [ -d ".gsd" ]; then
+            echo "::error::.gsd/ directory must not be checked in"
+            exit 1
+          fi
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.21.0
+          package-manager-cache: false
+      - name: Validate skill references
+        run: node scripts/check-skill-references.mjs
