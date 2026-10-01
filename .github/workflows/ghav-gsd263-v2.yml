@@ -1,0 +1,48 @@
+name: GHAV GSD 263 v2 Linux before
+on:
+  push:
+    branches:
+      - codex/ghav-gsd263-v2-before
+permissions:
+  contents: read
+  actions: write
+jobs:
+  build:
+    name: Build linux-x64-gnu
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      CARGO_INCREMENTAL: '0'
+      CARGO_ENCODED_RUSTFLAGS: ''
+    steps:
+      - name: Checkout fixed prepared source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 128d615510fe989c2be56dacdb97cefe480ee70c
+      - name: Install fixed Rust toolchain
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: 1.98.1
+          targets: x86_64-unknown-linux-gnu
+      - name: Fixed source, lock, and toolchain
+        run: |
+          git rev-parse HEAD
+          sha256sum native/Cargo.lock native/crates/engine/Cargo.toml
+          cargo tree --manifest-path native/Cargo.toml --locked -e features -i ahash@0.8.12
+          rustc --version
+          cargo --version
+      - name: Build native addon
+        working-directory: native/crates/engine
+        run: cargo build --release --locked --target x86_64-unknown-linux-gnu
+      - name: Prepare and hash native artifact
+        run: |
+          mkdir -p artifacts
+          cp native/target/x86_64-unknown-linux-gnu/release/libgsd_engine.so artifacts/gsd_engine.node
+          sha256sum artifacts/gsd_engine.node
+          wc -c artifacts/gsd_engine.node
+      - name: Upload artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-linux-x64-gnu
+          path: artifacts/gsd_engine.node
+          if-no-files-found: error
