@@ -1,0 +1,110 @@
+name: GHAV GSD 1700 complete build before
+
+on:
+  push:
+    branches:
+      - codex/ghav-gsd1700-complete-build-before
+
+permissions:
+  contents: read
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      docs-only: ${{ steps.check.outputs.docs-only }}
+    steps:
+      - name: Checkout pinned source for change detection
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: aea00bfabf92509bc81d280cc76d10cf113103d7
+          fetch-depth: 0
+      - name: Check if only documentation changed
+        id: check
+        env:
+          PR_BASE_SHA: 91d0167c66710b483a9eae41210127cddd672b76
+          PUSH_BEFORE_SHA: 91d0167c66710b483a9eae41210127cddd672b76
+          EVENT_NAME: push
+          HEAD_SHA: aea00bfabf92509bc81d280cc76d10cf113103d7
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            BASE="$PR_BASE_SHA"
+          else
+            BASE="$PUSH_BEFORE_SHA"
+          fi
+          FILES=$(git diff --name-only "$BASE" "$HEAD_SHA" 2>/dev/null || git diff --name-only HEAD~1)
+          echo "Changed files:"
+          echo "$FILES"
+          NON_DOCS=$(echo "$FILES" | grep -vE '\.(md|markdown)$' | grep -vE '^docs/' | grep -vE '^LICENSE$' || true)
+          if [ -z "$NON_DOCS" ]; then
+            echo "docs-only=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Only documentation files changed — skipping build/test"
+          else
+            echo "docs-only=false" >> "$GITHUB_OUTPUT"
+            echo "Non-docs files changed:"
+            echo "$NON_DOCS"
+          fi
+      - name: Record fixed event/source facts
+        run: |
+          test "$(git rev-parse HEAD)" = 'aea00bfabf92509bc81d280cc76d10cf113103d7'
+          test "$(git rev-parse HEAD^{tree})" = '430fe427a5db605c48f989f6a5b07f1d47d2bbfe'
+          test '${{ steps.check.outputs.docs-only }}' = 'false'
+          echo "GHAV_SOURCE_SHA=$(git rev-parse HEAD)"
+          echo "GHAV_SOURCE_TREE=$(git rev-parse HEAD^{tree})"
+          echo "GHAV_DOCS_ONLY=${{ steps.check.outputs.docs-only }}"
+
+  build:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.docs-only != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: aea00bfabf92509bc81d280cc76d10cf113103d7
+          fetch-depth: 0
+      - name: Verify pinned build source
+        run: |
+          test "$(git rev-parse HEAD)" = 'aea00bfabf92509bc81d280cc76d10cf113103d7'
+          test "$(git rev-parse HEAD^{tree})" = '430fe427a5db605c48f989f6a5b07f1d47d2bbfe'
+          echo "GHAV_SOURCE_SHA=$(git rev-parse HEAD)"
+          echo "GHAV_SOURCE_TREE=$(git rev-parse HEAD^{tree})"
+          echo "GHAV_SHALLOW=$(git rev-parse --is-shallow-repository)"
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Record tool versions
+        run: |
+          echo "GHAV_NODE_VERSION=$(node --version)"
+          echo "GHAV_NPM_VERSION=$(npm --version)"
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Typecheck extensions
+        run: npm run typecheck:extensions
+      - name: Validate package is installable
+        run: npm run validate-pack
+      - name: Run unit tests
+        run: npm run test:unit
+      - name: Run integration tests
+        run: npm run test:integration
+      - name: Record complete build/check output witness
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          roots = [Path('dist'), *Path('packages').glob('*/dist')]
+          files = sorted((p for root in roots for p in root.rglob('*') if p.is_file()), key=lambda p: p.as_posix())
+          assert files and Path('dist/loader.js').is_file() and Path('packages/pi-coding-agent/dist/index.js').is_file()
+          h = hashlib.sha256()
+          for path in files:
+              h.update(path.as_posix().encode() + b'\0')
+              h.update(path.read_bytes())
+              h.update(b'\0')
+          print('GHAV_DIST_COUNT=' + str(len(files)))
+          print('GHAV_DIST_SHA256=' + h.hexdigest())
+          PY
