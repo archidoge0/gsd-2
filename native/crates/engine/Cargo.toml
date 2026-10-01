@@ -11,6 +11,8 @@ description = "N-API native addon for GSD — exposes high-performance Rust modu
 crate-type = ["cdylib"]
 
 [dependencies]
+# Shared evaluation repair: use runtime entropy so separate builds have no baked-in RNG keys.
+ahash = { version = "=0.8.12", features = ["runtime-rng"] }
 gsd-ast = { path = "../ast" }
 gsd-grep = { path = "../grep" }
 arboard = "3"
