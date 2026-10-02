@@ -1,14 +1,14 @@
-name: GHAV GSD 4093 trace v2 (before)
+name: GHAV GSD 4093 trace v3 (before, per-file integration)
 on:
   push:
     branches:
-      - 'ghav/gsd2-4093-trace2'
+      - 'ghav/gsd2-4093-trace3'
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   build:
-    timeout-minutes: 300
+    timeout-minutes: 340
     runs-on: ubuntu-24.04
     env:
       UV_USE_IO_URING: "0"
@@ -89,12 +89,9 @@ jobs:
         run: npm run test:packages
 
       - name: Run integration tests
-        shell: bash /home/runner/work/gsd-2/gsd-2/.github/ghav/trace-shell.sh {0}
-        timeout-minutes: 75
+        timeout-minutes: 150
         continue-on-error: true
-        env:
-          GHAV_STEP: integration
-        run: npm run test:integration
+        run: bash .github/ghav/integration-per-file.sh
 
       - name: Check test coverage thresholds
         shell: bash /home/runner/work/gsd-2/gsd-2/.github/ghav/trace-shell.sh {0}
@@ -112,6 +109,7 @@ jobs:
         if: always()
         run: |
           sudo chown -R "$(id -un)" /home/runner/ghav-trace || true
+          cp /home/runner/ghav-trace/integration-manifest.tsv /home/runner/ || true
           tar -C /home/runner -czf /home/runner/ghav-trace-raw.tar.gz ghav-trace
           ls -la /home/runner/ghav-trace-raw.tar.gz /home/runner/ghav-trace-summary.json.gz
 
@@ -120,7 +118,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ghav-trace-summary
-          path: /home/runner/ghav-trace-summary.json.gz
+          path: |
+            /home/runner/ghav-trace-summary.json.gz
+            /home/runner/integration-manifest.tsv
           retention-days: 30
 
       - name: Upload raw traces (ghav)
