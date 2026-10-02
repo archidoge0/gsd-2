@@ -12,5 +12,10 @@ date +%s.%N > "$dir/start"
 opts=(-f -ff -qq -ttt -y -s 4096 -e trace=%file,%process,getdents64,getdents,fchdir -o "$dir/t")
 # No --seccomp-bpf: combined with -u it fails with ENOSYS on exec, and it would
 # set no_new_privs, which breaks sudo inside traced steps.
+if [ "${GHAV_TRACE_NOSUDO:-0}" = "1" ]; then
+  # Unprivileged tracing of our own descendants; seccomp-bpf stops only on traced
+  # syscalls. Only for steps that never call sudo.
+  exec strace --seccomp-bpf "${opts[@]}" bash --noprofile --norc -eo pipefail "$script"
+fi
 exec sudo -E env "PATH=$PATH" strace -u "$(id -un)" "${opts[@]}" \
   bash --noprofile --norc -eo pipefail "$script"

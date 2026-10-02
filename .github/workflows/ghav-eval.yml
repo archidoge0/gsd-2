@@ -1,18 +1,19 @@
-name: GHAV GSD 4093 trace (before)
+name: GHAV GSD 4093 trace v2 (before)
 on:
   push:
     branches:
-      - 'ghav/gsd2-4093-trace'
+      - 'ghav/gsd2-4093-trace2'
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   build:
-    timeout-minutes: 150
+    timeout-minutes: 300
     runs-on: ubuntu-24.04
     env:
       UV_USE_IO_URING: "0"
       GHAV_TRACE_DIR: /home/runner/ghav-trace
+      GHAV_TRACE_NOSUDO: "1"
 
     steps:
       - name: Checkout repository
@@ -89,12 +90,16 @@ jobs:
 
       - name: Run integration tests
         shell: bash /home/runner/work/gsd-2/gsd-2/.github/ghav/trace-shell.sh {0}
+        timeout-minutes: 75
+        continue-on-error: true
         env:
           GHAV_STEP: integration
         run: npm run test:integration
 
       - name: Check test coverage thresholds
         shell: bash /home/runner/work/gsd-2/gsd-2/.github/ghav/trace-shell.sh {0}
+        timeout-minutes: 120
+        continue-on-error: true
         env:
           GHAV_STEP: coverage
         run: npm run test:coverage
