@@ -1,14 +1,18 @@
-name: GHAV GSD 4093 build integration core
+name: GHAV GSD 4093 trace (before)
 on:
   push:
     branches:
-      - 'codex/ghav-gsd4093-*'
+      - 'ghav/gsd2-4093-trace'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
   build:
-    timeout-minutes: 30
+    timeout-minutes: 150
     runs-on: ubuntu-24.04
+    env:
+      UV_USE_IO_URING: "0"
+      GHAV_TRACE_DIR: /home/runner/ghav-trace
 
     steps:
       - name: Checkout repository
@@ -20,10 +24,22 @@ jobs:
           node-version: '24'
           cache: 'npm'
 
+      - name: Install strace (ghav trace)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq strace
+          strace -V | head -1
+
       - name: Install dependencies
+        shell: bash /home/runner/work/gsd-2/gsd-2/.github/ghav/trace-shell.sh {0}
+        env:
+          GHAV_STEP: install
         run: npm ci
 
       - name: Install web host dependencies
+        shell: bash /home/runner/work/gsd-2/gsd-2/.github/ghav/trace-shell.sh {0}
+        env:
+          GHAV_STEP: web-install
         run: npm --prefix web ci
 
       - name: Cache Next.js build
@@ -36,26 +52,76 @@ jobs:
             nextjs-${{ runner.os }}-
 
       - name: Build
+        shell: bash /home/runner/work/gsd-2/gsd-2/.github/ghav/trace-shell.sh {0}
+        env:
+          GHAV_STEP: build
         run: npm run build
 
       - name: Build web host
+        shell: bash /home/runner/work/gsd-2/gsd-2/.github/ghav/trace-shell.sh {0}
+        env:
+          GHAV_STEP: build-web-host
         run: npm run build:web-host
 
       - name: Typecheck extensions
+        shell: bash /home/runner/work/gsd-2/gsd-2/.github/ghav/trace-shell.sh {0}
+        env:
+          GHAV_STEP: typecheck
         run: npm run typecheck:extensions
 
       - name: Validate package is installable
+        shell: bash /home/runner/work/gsd-2/gsd-2/.github/ghav/trace-shell.sh {0}
+        env:
+          GHAV_STEP: validate-pack
         run: npm run validate-pack
 
       - name: Run unit tests
+        shell: bash /home/runner/work/gsd-2/gsd-2/.github/ghav/trace-shell.sh {0}
+        env:
+          GHAV_STEP: unit
         run: npm run test:unit
 
       - name: Run package tests
+        shell: bash /home/runner/work/gsd-2/gsd-2/.github/ghav/trace-shell.sh {0}
+        env:
+          GHAV_STEP: packages
         run: npm run test:packages
 
       - name: Run integration tests
+        shell: bash /home/runner/work/gsd-2/gsd-2/.github/ghav/trace-shell.sh {0}
+        env:
+          GHAV_STEP: integration
         run: npm run test:integration
 
       - name: Check test coverage thresholds
+        shell: bash /home/runner/work/gsd-2/gsd-2/.github/ghav/trace-shell.sh {0}
+        env:
+          GHAV_STEP: coverage
         run: npm run test:coverage
 
+      - name: Summarize traces (ghav)
+        if: always()
+        run: python3 .github/ghav/summarize.py /home/runner/ghav-trace-summary.json.gz
+
+      - name: Pack raw traces (ghav)
+        if: always()
+        run: |
+          sudo chown -R "$(id -un)" /home/runner/ghav-trace || true
+          tar -C /home/runner -czf /home/runner/ghav-trace-raw.tar.gz ghav-trace
+          ls -la /home/runner/ghav-trace-raw.tar.gz /home/runner/ghav-trace-summary.json.gz
+
+      - name: Upload trace summary (ghav)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghav-trace-summary
+          path: /home/runner/ghav-trace-summary.json.gz
+          retention-days: 30
+
+      - name: Upload raw traces (ghav)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghav-trace-raw
+          path: /home/runner/ghav-trace-raw.tar.gz
+          retention-days: 7
