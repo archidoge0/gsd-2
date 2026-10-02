@@ -1,0 +1,550 @@
+name: GHAV GSD 4093 obligation tests
+on:
+  push:
+    branches:
+      - 'ghav/gsd2-4093-ni'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  orig-a:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install web host dependencies
+        run: npm --prefix web ci
+      - name: Cache Next.js build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-${{ hashFiles('web/app/**', 'web/components/**', 'web/lib/**', 'web/hooks/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+      - name: Build
+        run: npm run build
+      - name: Build web host
+        run: npm run build:web-host
+      - name: Typecheck extensions
+        run: npm run typecheck:extensions
+      - name: Validate package is installable
+        run: npm run validate-pack
+      - name: Run unit tests
+        run: npm run test:unit
+      - name: Run package tests
+        run: npm run test:packages
+      - name: Run integration tests (original position)
+        run: npm run test:integration 2>&1 | tail -15
+      - name: Check test coverage thresholds
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: Record reader result
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          { echo "outcome=${{ steps.reader.outcome }}"; grep -aE '(ℹ (tests|pass|fail|cancelled|skipped)|^ERROR: Coverage|% Stmts|All files|failing tests|✖ )' /home/runner/reader.log | tail -40; } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  orig-b:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install web host dependencies
+        run: npm --prefix web ci
+      - name: Cache Next.js build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-${{ hashFiles('web/app/**', 'web/components/**', 'web/lib/**', 'web/hooks/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+      - name: Build
+        run: npm run build
+      - name: Build web host
+        run: npm run build:web-host
+      - name: Typecheck extensions
+        run: npm run typecheck:extensions
+      - name: Validate package is installable
+        run: npm run validate-pack
+      - name: Run unit tests
+        run: npm run test:unit
+      - name: Run package tests
+        run: npm run test:packages
+      - name: Run integration tests (original position)
+        run: npm run test:integration 2>&1 | tail -15
+      - name: Check test coverage thresholds
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: Record reader result
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          { echo "outcome=${{ steps.reader.outcome }}"; grep -aE '(ℹ (tests|pass|fail|cancelled|skipped)|^ERROR: Coverage|% Stmts|All files|failing tests|✖ )' /home/runner/reader.log | tail -40; } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  m1-no-integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install web host dependencies
+        run: npm --prefix web ci
+      - name: Cache Next.js build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-${{ hashFiles('web/app/**', 'web/components/**', 'web/lib/**', 'web/hooks/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+      - name: Build
+        run: npm run build
+      - name: Build web host
+        run: npm run build:web-host
+      - name: Typecheck extensions
+        run: npm run typecheck:extensions
+      - name: Validate package is installable
+        run: npm run validate-pack
+      - name: Run unit tests
+        run: npm run test:unit
+      - name: Run package tests
+        run: npm run test:packages
+      - name: Check test coverage thresholds
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: Record reader result
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          { echo "outcome=${{ steps.reader.outcome }}"; grep -aE '(ℹ (tests|pass|fail|cancelled|skipped)|^ERROR: Coverage|% Stmts|All files|failing tests|✖ )' /home/runner/reader.log | tail -40; } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  c1-a:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Check test coverage thresholds
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: Record reader result
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          { echo "outcome=${{ steps.reader.outcome }}"; grep -aE '(ℹ (tests|pass|fail|cancelled|skipped)|^ERROR: Coverage|% Stmts|All files|failing tests|✖ )' /home/runner/reader.log | tail -40; } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  c2-a:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install web host dependencies
+        run: npm --prefix web ci
+      - name: Build
+        run: npm run build
+      - name: Check test coverage thresholds
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: Record reader result
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          { echo "outcome=${{ steps.reader.outcome }}"; grep -aE '(ℹ (tests|pass|fail|cancelled|skipped)|^ERROR: Coverage|% Stmts|All files|failing tests|✖ )' /home/runner/reader.log | tail -40; } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  i1-a:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run integration tests
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tee /home/runner/reader.log
+      - name: Record reader result
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          { echo "outcome=${{ steps.reader.outcome }}"; grep -aE '(ℹ (tests|pass|fail|cancelled|skipped)|^ERROR: Coverage|% Stmts|All files|failing tests|✖ )' /home/runner/reader.log | tail -40; } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  i2-a:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install web host dependencies
+        run: npm --prefix web ci
+      - name: Build
+        run: npm run build
+      - name: Run integration tests
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tee /home/runner/reader.log
+      - name: Record reader result
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          { echo "outcome=${{ steps.reader.outcome }}"; grep -aE '(ℹ (tests|pass|fail|cancelled|skipped)|^ERROR: Coverage|% Stmts|All files|failing tests|✖ )' /home/runner/reader.log | tail -40; } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  c1-b:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Check test coverage thresholds
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: Record reader result
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          { echo "outcome=${{ steps.reader.outcome }}"; grep -aE '(ℹ (tests|pass|fail|cancelled|skipped)|^ERROR: Coverage|% Stmts|All files|failing tests|✖ )' /home/runner/reader.log | tail -40; } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  c2-b:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install web host dependencies
+        run: npm --prefix web ci
+      - name: Build
+        run: npm run build
+      - name: Check test coverage thresholds
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: Record reader result
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          { echo "outcome=${{ steps.reader.outcome }}"; grep -aE '(ℹ (tests|pass|fail|cancelled|skipped)|^ERROR: Coverage|% Stmts|All files|failing tests|✖ )' /home/runner/reader.log | tail -40; } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  i1-b:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run integration tests
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tee /home/runner/reader.log
+      - name: Record reader result
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          { echo "outcome=${{ steps.reader.outcome }}"; grep -aE '(ℹ (tests|pass|fail|cancelled|skipped)|^ERROR: Coverage|% Stmts|All files|failing tests|✖ )' /home/runner/reader.log | tail -40; } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  i2-b:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install web host dependencies
+        run: npm --prefix web ci
+      - name: Build
+        run: npm run build
+      - name: Run integration tests
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tee /home/runner/reader.log
+      - name: Record reader result
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          { echo "outcome=${{ steps.reader.outcome }}"; grep -aE '(ℹ (tests|pass|fail|cancelled|skipped)|^ERROR: Coverage|% Stmts|All files|failing tests|✖ )' /home/runner/reader.log | tail -40; } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  produce:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install web host dependencies
+        run: npm --prefix web ci
+      - name: Build
+        run: npm run build
+      - name: Pack groups
+        run: |
+          tar -czf /home/runner/build-dist.tgz dist $(ls -d packages/*/dist pkg/dist 2>/dev/null)
+          tar -czf /home/runner/web-nm.tgz web/node_modules
+          ls -la /home/runner/*.tgz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-dist
+          path: /home/runner/build-dist.tgz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-nm
+          path: /home/runner/web-nm.tgz
+
+  c1-with-dist:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    needs: produce
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-dist
+          path: /home/runner/restore
+      - name: Restore build-dist
+        run: tar -xzf /home/runner/restore/build-dist.tgz -C "$GITHUB_WORKSPACE"
+      - name: Check test coverage thresholds
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: Record reader result
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          { echo "outcome=${{ steps.reader.outcome }}"; grep -aE '(ℹ (tests|pass|fail|cancelled|skipped)|^ERROR: Coverage|% Stmts|All files|failing tests|✖ )' /home/runner/reader.log | tail -40; } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  i1-with-dist:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    needs: produce
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-dist
+          path: /home/runner/restore
+      - name: Restore build-dist
+        run: tar -xzf /home/runner/restore/build-dist.tgz -C "$GITHUB_WORKSPACE"
+      - name: Run integration tests
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tee /home/runner/reader.log
+      - name: Record reader result
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          { echo "outcome=${{ steps.reader.outcome }}"; grep -aE '(ℹ (tests|pass|fail|cancelled|skipped)|^ERROR: Coverage|% Stmts|All files|failing tests|✖ )' /home/runner/reader.log | tail -40; } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  i1-with-web-nm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    needs: produce
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-nm
+          path: /home/runner/restore
+      - name: Restore web-nm
+        run: tar -xzf /home/runner/restore/web-nm.tgz -C "$GITHUB_WORKSPACE"
+      - name: Run integration tests
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tee /home/runner/reader.log
+      - name: Record reader result
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          { echo "outcome=${{ steps.reader.outcome }}"; grep -aE '(ℹ (tests|pass|fail|cancelled|skipped)|^ERROR: Coverage|% Stmts|All files|failing tests|✖ )' /home/runner/reader.log | tail -40; } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
