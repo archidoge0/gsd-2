@@ -1,8 +1,8 @@
-name: GHAV GSD 4093 trace v2 (before)
+name: GHAV GSD 4093 trace v4 (before, detach at step end)
 on:
   push:
     branches:
-      - 'ghav/gsd2-4093-trace2'
+      - 'ghav/gsd2-4093-trace4'
   workflow_dispatch:
 permissions:
   contents: read
@@ -13,7 +13,6 @@ jobs:
     env:
       UV_USE_IO_URING: "0"
       GHAV_TRACE_DIR: /home/runner/ghav-trace
-      GHAV_TRACE_NOSUDO: "1"
 
     steps:
       - name: Checkout repository
