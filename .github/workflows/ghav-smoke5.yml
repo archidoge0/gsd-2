@@ -2,7 +2,7 @@ name: GHAV trace v5 smoke
 on:
   push:
     branches:
-      - 'ghav/gsd2-4093-trace5'
+      - 'ghav/gsd2-4093-trace5-smoke'
   workflow_dispatch:
 permissions:
   contents: read
@@ -54,6 +54,11 @@ jobs:
           exit 3
       - name: Check failing outcome
         run: test "${{ steps.failing.outcome }}" = failure
+      - name: Raw trace lines (debug)
+        if: always()
+        run: |
+          strace -V | head -1
+          grep -h -E "^[0-9.]+ (connect|execve)\(" /home/runner/ghav-trace/orphan/t.* | cut -c1-400 | head -12
       - name: Finalize traces (ghav)
         if: always()
         run: bash .github/ghav/finalize.sh
