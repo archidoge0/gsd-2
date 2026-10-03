@@ -1,0 +1,50 @@
+name: "ghav human: CI"
+"on":
+  push:
+    branches:
+      - ghav/dev/1552
+    paths:
+      - .ghav/human
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Ensure .gsd/ is not checked in
+        run: |
+          if [ -d ".gsd" ]; then
+            echo "::error::.gsd/ directory must not be checked in"
+            exit 1
+          fi
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Validate skill references
+        run: node scripts/check-skill-references.mjs
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Typecheck extensions
+        run: npm run typecheck:extensions
+      - name: Validate package is installable
+        run: npm run validate-pack
+      - name: Run unit tests
+        run: npm run test:unit
+      - name: Run integration tests
+        run: npm run test:integration
