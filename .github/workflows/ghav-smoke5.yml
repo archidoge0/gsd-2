@@ -1,0 +1,83 @@
+name: GHAV trace v5 smoke
+on:
+  push:
+    branches:
+      - 'ghav/gsd2-4093-trace5'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GHAV_TRACE_DIR: /home/runner/ghav-trace
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Install strace (ghav trace)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq strace
+          strace -V | head -1
+      - name: Orphan step
+        id: orphan
+        shell: bash /home/runner/work/gsd-2/gsd-2/.github/ghav/trace-shell.sh {0}
+        timeout-minutes: 3
+        env:
+          GHAV_STEP: orphan
+        run: |
+          mkdir -p out
+          echo built > out/a.txt
+          ( sh -c 'sleep 5; echo late > out/late.txt; sleep 600' & )
+          curl -sS -o /dev/null https://api.github.com || true
+          echo "visible output line"
+          echo "x=1" >> "$GITHUB_OUTPUT"
+      - name: Check step output
+        run: test "${{ steps.orphan.outputs.x }}" = 1
+      - name: Reader step
+        shell: bash /home/runner/work/gsd-2/gsd-2/.github/ghav/trace-shell.sh {0}
+        timeout-minutes: 3
+        env:
+          GHAV_STEP: reader
+        run: |
+          cat out/a.txt
+          sleep 8
+          cat out/late.txt
+      - name: Failing step
+        id: failing
+        shell: bash /home/runner/work/gsd-2/gsd-2/.github/ghav/trace-shell.sh {0}
+        continue-on-error: true
+        env:
+          GHAV_STEP: failing
+        run: |
+          echo before failure
+          exit 3
+      - name: Check failing outcome
+        run: test "${{ steps.failing.outcome }}" = failure
+      - name: Finalize traces (ghav)
+        if: always()
+        run: bash .github/ghav/finalize.sh
+      - name: Summarize traces (ghav)
+        if: always()
+        run: |
+          python3 .github/ghav/summarize.py /home/runner/ghav-trace-summary.json.gz
+          python3 - <<'PY'
+          import gzip, json
+          d = json.load(gzip.open('/home/runner/ghav-trace-summary.json.gz', 'rt'))
+          for name, s in d['steps'].items():
+              procs = s.get('procs', {})
+              surv = [p for p in procs.values() if p.get('survivor')]
+              late = [p['argv'] for p in procs.values() if any(w.endswith('out/late.txt') for w in p.get('write', []))]
+              net = sorted({n for p in procs.values() for n in p.get('net', [])})
+              dig = (s.get('digests') or {}).get('digests', {})
+              print(name, 'procs', len(procs), 'survivors', len(surv), 'late.txt writers', late, 'net', net[:5], 'digests', len(dig))
+              print('  start', s.get('start'), 'end', s.get('end'), 'step-end survivors:', (s.get('survivors_at_step_end') or '')[:200])
+          print('envs', len(d['envs']))
+          PY
+      - name: Upload trace summary (ghav)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghav-smoke5-summary
+          path: /home/runner/ghav-trace-summary.json.gz
+          retention-days: 7

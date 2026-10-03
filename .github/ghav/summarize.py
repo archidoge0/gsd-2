@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""Summarize per-step `strace -ff` traces into per-process file footprints.
+"""Summarize per-step `strace -ff` traces into per-process footprints (v2, for trace-shell v5).
 
-Input:  $GHAV_TRACE_DIR/<step>/{cwd,start,t.<tid>}
-Output: gzip JSON {step: {cwd, start, root, procs: {tgid: record}}}
-A record has parent, argv, exe, cwd0, t0, t1 and the sorted path sets
-read / write / probe / list / exec.
+Input:  $GHAV_TRACE_DIR/<step>/{cwd,start,end,env0,t.<tid>,digests.json,survivors-*.txt}
+Output: gzip JSON {"envs": {hash: {var: value}}, "steps": {step: {...}}}
+A step has cwd, start, end, root, procs, digests, survivors_at_step_end, survivors_at_job_end.
+A process record has parent, argv, exe, env (hash into "envs", from the execve envp), cwd0, t0, t1,
+survivor (alive after the step's script ended), the sorted path sets read / write / probe / list /
+exec, and net (connect targets).
 """
 import gzip
+import hashlib
 import json
 import os
 import re
@@ -90,9 +93,27 @@ def join(base, p):
     return os.path.normpath(p)
 
 
+ENVS = {}
+SOCK = re.compile(r'sa_family=(AF_\w+)(?:, sin6?_port=htons\((\d+)\))?(?:.*?(?:inet_addr\("([^"]+)"\)|inet_pton\(AF_INET6, "([^"]+)"))?(?:, sun_path=(@?"[^"]*"))?')
+
+
+def env_hash(tok):
+    if not tok or not tok.startswith("["):
+        return None
+    pairs = {}
+    for x in split_args(tok.strip()[1:-1]):
+        v = unq(x.strip())
+        if v and "=" in v:
+            k, _, val = v.partition("=")
+            pairs[k] = val
+    h = hashlib.sha256(json.dumps(pairs, sort_keys=True).encode()).hexdigest()[:16]
+    ENVS.setdefault(h, pairs)
+    return h
+
+
 def new_rec(parent, cwd0):
-    return {"parent": parent, "argv": None, "exe": None, "cwd0": cwd0, "t0": None, "t1": None,
-            "read": set(), "write": set(), "probe": set(), "list": set(), "exec": set()}
+    return {"parent": parent, "argv": None, "exe": None, "env": None, "cwd0": cwd0, "t0": None, "t1": None,
+            "read": set(), "write": set(), "probe": set(), "list": set(), "exec": set(), "net": set()}
 
 
 def summarize_step(sdir):
@@ -203,6 +224,13 @@ def summarize_step(sdir):
                         rec["exe"] = path
                         argv_tok = a[pi + 1] if len(a) > pi + 1 else ""
                         rec["argv"] = [unq(x.strip()) for x in split_args(argv_tok.strip()[1:-1])] if argv_tok.startswith("[") else None
+                        rec["env"] = env_hash(a[pi + 2]) if len(a) > pi + 2 else None
+                    continue
+                if name == "connect":
+                    sm = SOCK.search(args)
+                    if sm:
+                        fam, port, v4, v6, un = sm.groups()
+                        rec["net"].add(f"{fam} {un}" if un else f"{fam} {v4 or v6 or '?'}:{port or '?'}")
                     continue
                 if path is None:
                     continue
@@ -241,10 +269,22 @@ def summarize_step(sdir):
                         dst = join(fdpath(a[1]) or here, unq(a[2])) if len(a) > 2 else None
                     if ok and dst:
                         rec["write"].add(dst)
+    end = read_opt(sdir, "end")
     out = {}
     for tg, rec in procs.items():
-        out[str(tg)] = {k: (sorted(v) if isinstance(v, set) else v) for k, v in rec.items()}
-    return {"cwd": root_cwd, "start": start, "root": root, "files": len(files), "procs": out}
+        r = {k: (sorted(v) if isinstance(v, set) else v) for k, v in rec.items()}
+        r["survivor"] = bool(end and rec["t1"] and rec["t1"] > float(end))
+        out[str(tg)] = r
+    dig = os.path.join(sdir, "digests.json")
+    return {"cwd": root_cwd, "start": start, "end": end, "root": root, "files": len(files), "procs": out,
+            "digests": json.load(open(dig)) if os.path.exists(dig) else None,
+            "survivors_at_step_end": read_opt(sdir, "survivors-at-step-end.txt"),
+            "survivors_at_job_end": read_opt(sdir, "survivors-at-job-end.txt")}
+
+
+def read_opt(sdir, name):
+    p = os.path.join(sdir, name)
+    return open(p, errors="replace").read().strip() if os.path.exists(p) else None
 
 
 def main():
@@ -261,7 +301,7 @@ def main():
             summary[step] = {"error": repr(e)}
             print(f"{step}: ERROR {e!r}")
     with gzip.open(OUT, "wt") as f:
-        json.dump(summary, f)
+        json.dump({"envs": ENVS, "steps": summary}, f)
     print("wrote", OUT, os.path.getsize(OUT), "bytes")
 
 
