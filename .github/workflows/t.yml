@@ -1,0 +1,19 @@
+name: "ghav strace seccomp root test"
+on:
+  push:
+    branches: [ghav/test-trace-priv2]
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq strace >/dev/null
+          strace -V | head -1
+          sudo install -o root -g root -m 4755 "$(command -v strace)" $HOME/strace-root
+          echo "== A: setuid strace, --seccomp-bpf, -u runner"
+          $HOME/strace-root --seccomp-bpf -f -qq -u runner -o /tmp/ta -e trace=%process,%file bash -c 'id -un; sudo -n true && echo SUDO_OK_A; cat /proc/self/status | grep NoNewPrivs' || echo "A exit $?"
+          echo "== B: setuid strace, --seccomp-bpf, no -u"
+          $HOME/strace-root --seccomp-bpf -f -qq -o /tmp/tb -e trace=%process,%file bash -c 'id -un; sudo -n true && echo SUDO_OK_B; cat /proc/self/status | grep NoNewPrivs' || echo "B exit $?"
+          echo "== C: sudo strace --seccomp-bpf -u runner"
+          sudo -E strace --seccomp-bpf -f -qq -u runner -o /tmp/tc -e trace=%process,%file bash -c 'id -un; sudo -n true && echo SUDO_OK_C; cat /proc/self/status | grep NoNewPrivs' || echo "C exit $?"
+          ls -la /tmp/ta* /tmp/tb* /tmp/tc* 2>/dev/null | head; grep -c execve /tmp/ta /tmp/tb /tmp/tc 2>/dev/null
