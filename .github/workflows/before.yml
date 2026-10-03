@@ -1,0 +1,10 @@
+name: "ghav before: marker test"
+on:
+  push:
+    branches: [ghav/test-markers]
+    paths: [".ghav/before"]
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo before

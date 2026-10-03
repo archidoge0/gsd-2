@@ -1,0 +1,10 @@
+name: "ghav human: marker test"
+on:
+  push:
+    branches: [ghav/test-markers]
+    paths: [".ghav/human"]
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo human
