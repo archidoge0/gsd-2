@@ -22,7 +22,7 @@ status="$dir/status"
 log="$dir/output.log"
 rm -f "$status"
 : > "$log"
-opts=(--seccomp-bpf -f -ff -qq -ttt -y -s 4096 -e verbose=execve
+opts=(--seccomp-bpf -f -ff -qq -ttt -y -s 4096 -e abbrev=!execve
       -e trace=%file,%process,%network,getdents64,getdents,fchdir -o "$dir/t")
 setsid strace "${opts[@]}" bash -c 'bash --noprofile --norc -eo pipefail "$1"; echo $? > "$2"' \
   _ "$script" "$status" < /dev/null > "$log" 2>&1 &
