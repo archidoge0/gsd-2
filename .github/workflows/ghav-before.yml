@@ -1,0 +1,171 @@
+name: "ghav before: CI"
+"on":
+  push:
+    branches:
+      - ghav/dev/5397
+    paths:
+      - .ghav/before
+jobs:
+  docs-check:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Scan documentation for prompt injection
+        run: bash scripts/docs-prompt-injection-scan.sh --diff HEAD
+  lint:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+      - name: Scan for hardcoded secrets
+        run: bash scripts/secret-scan.sh --diff HEAD
+      - name: Scan for base64-encoded secrets
+        run: bash scripts/base64-scan.sh --diff HEAD
+      - name: Ensure .gsd/ is not checked in
+        run: |
+          if [ -d ".gsd" ]; then
+            echo "::error::.gsd/ directory must not be checked in"
+            exit 1
+          fi
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Validate skill references
+        run: node scripts/check-skill-references.mjs
+      - name: Require tests with source changes
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bash scripts/require-tests.sh
+      - name: Reject source-grep tests
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bash scripts/check-source-grep-tests.sh
+      - name: CodeRabbit-theme self-tests
+        run: node --test scripts/__tests__/check-coderabbit-themes.test.mjs
+      - name: Reject recurring CodeRabbit themes
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/check-coderabbit-themes.mjs
+  ci-circuit-breaker-fast:
+    timeout-minutes: 2
+    needs:
+      - docs-check
+      - lint
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Stop pipeline when fast gates fail
+        env:
+          DOCS_CHECK: ${{ needs.docs-check.result }}
+          LINT: ${{ needs.lint.result }}
+        run: |
+          if [ "$DOCS_CHECK" != "success" ] || [ "$LINT" != "success" ]; then
+            echo "::error::Fast gate failed (docs-check=$DOCS_CHECK, lint=$LINT). Cancelling follow-on CI jobs."
+            exit 1
+          fi
+  mergeability-gate:
+    timeout-minutes: 2
+    needs:
+      - ci-circuit-breaker-fast
+    runs-on: ubuntu-latest
+    outputs:
+      skip-heavy-jobs: ${{ steps.gate.outputs.skip-heavy-jobs }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      - name: Determine whether heavy CI should be skipped
+        id: gate
+        uses: actions/github-script@v8
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        with:
+          script: |
+            const eventName = process.env.EVENT_NAME;
+            let mergeableState = "unknown";
+
+            if (eventName === "pull_request") {
+              for (let i = 0; i < 6; i++) {
+                const { data } = await github.rest.pulls.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.payload.pull_request.number,
+                });
+
+                mergeableState = data.mergeable_state ?? "unknown";
+                if (mergeableState !== "unknown") break;
+                await new Promise(resolve => setTimeout(resolve, 1000));
+              }
+            }
+
+            const { shouldSkipHeavyJobs } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/ci/mergeability-gate.mjs`);
+            const skipHeavyJobs = shouldSkipHeavyJobs({ eventName, mergeableState });
+            core.info(`mergeable_state=${mergeableState}; skip-heavy-jobs=${skipHeavyJobs}`);
+            core.setOutput("skip-heavy-jobs", skipHeavyJobs ? "true" : "false");
+  build:
+    timeout-minutes: 60
+    needs:
+      - ci-circuit-breaker-fast
+      - mergeability-gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install web host dependencies
+        run: npm --prefix web ci
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-${{ hashFiles('web/app/**', 'web/components/**', 'web/lib/**', 'web/hooks/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+      - name: Build core
+        run: npm run build:core
+      - name: Build web host
+        run: npm run build:web-host
+      - name: Typecheck extensions
+        run: npm run typecheck:extensions
+      - name: Validate package is installable
+        run: npm run validate-pack
+      - name: Verify workspace coverage (every linkable package has tests)
+        run: npm run verify:workspace-coverage
+      - name: Run unit tests
+        run: npm run test:unit
+      - name: Run package tests
+        run: npm run test:packages
+      - name: Check test coverage thresholds
+        run: npm run test:coverage
+  docker-e2e:
+    timeout-minutes: 40
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build core
+        run: npm run build:core
+      - name: Run docker e2e suite
+        run: npm run test:e2e:docker
