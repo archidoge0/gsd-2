@@ -1,0 +1,132 @@
+name: "ghav human: CI"
+"on":
+  push:
+    branches:
+      - ghav/dev/4187
+    paths:
+      - .ghav/human
+jobs:
+  build:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install web host dependencies
+        run: npm --prefix web ci
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-${{ hashFiles('web/app/**', 'web/components/**', 'web/lib/**', 'web/hooks/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+      - name: Cache TypeScript incremental state
+        uses: actions/cache@v4
+        with:
+          path: |
+            *.tsbuildinfo
+            packages/*/*.tsbuildinfo
+            dist
+            packages/*/dist
+          key: tsbuild-${{ runner.os }}-${{ hashFiles('package-lock.json', 'tsconfig*.json', 'packages/*/tsconfig.json', 'src/**/*.ts', 'packages/*/src/**/*.ts') }}
+          restore-keys: |
+            tsbuild-${{ runner.os }}-
+      - name: Build core
+        run: npm run build:core
+      - name: Build web host
+        run: npm run build:web-host
+      - name: Typecheck extensions
+        run: npm run typecheck:extensions
+      - name: Validate package is installable
+        run: npm run validate-pack
+      - name: Run unit tests
+        run: npm run test:unit
+      - name: Run package tests
+        run: npm run test:packages
+      - name: Check test coverage thresholds
+        run: npm run test:coverage
+  integration-tests:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install web host dependencies
+        run: npm --prefix web ci
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-${{ hashFiles('web/app/**', 'web/components/**', 'web/lib/**', 'web/hooks/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+      - name: Cache TypeScript incremental state
+        uses: actions/cache@v4
+        with:
+          path: |
+            *.tsbuildinfo
+            packages/*/*.tsbuildinfo
+            dist
+            packages/*/dist
+          key: tsbuild-${{ runner.os }}-${{ hashFiles('package-lock.json', 'tsconfig*.json', 'packages/*/tsconfig.json', 'src/**/*.ts', 'packages/*/src/**/*.ts') }}
+          restore-keys: |
+            tsbuild-${{ runner.os }}-
+      - name: Build core
+        run: npm run build:core
+      - name: Run integration tests
+        run: npm run test:integration
+  rtk-portability:
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: linux
+            os: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ matrix.label == 'windows' && 'windows-2025' || matrix.label == 'linux' && 'ubuntu-latest' || matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install dependencies
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+        run: npm ci
+      - name: Validate managed RTK install
+        run: |-
+          node --experimental-strip-types --input-type=module -e "const mod = await import('./src/rtk.ts'); const path = mod.getManagedRtkPath(process.platform); if (!mod.validateRtkBinary(path)) {
+            console.error('Managed RTK validation failed:', path);
+            process.exit(1);
+          } console.log('Managed RTK validated at', path);"
+      - name: Run RTK-focused portability tests
+        run: node --import ./src/resources/extensions/gsd/tests/resolve-ts.mjs --experimental-strip-types --experimental-test-isolation=process --test src/tests/rtk.test.ts src/tests/rtk-execution-seams.test.ts src/tests/postinstall.test.ts src/tests/app-smoke.test.ts src/resources/extensions/gsd/tests/custom-verification.test.ts src/resources/extensions/gsd/tests/verification-gate.test.ts
+      - name: Generate RTK benchmark evidence
+        if: matrix.label == 'linux'
+        run: node scripts/rtk-benchmark.mjs --output .artifacts/rtk-benchmark.md
+      - name: Upload RTK benchmark artifact
+        if: matrix.label == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: rtk-benchmark-linux
+          path: .artifacts/rtk-benchmark.md
