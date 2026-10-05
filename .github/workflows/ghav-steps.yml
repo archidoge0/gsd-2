@@ -1,0 +1,1199 @@
+name: GHAV GSD 4093 step-level dependency tests
+on:
+  push:
+    branches:
+      - 'ghav/gsd2-4093-steps'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  orig-a:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: setup-node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: npm-ci
+        run: npm ci
+      - name: web-ci
+        run: npm --prefix web ci
+      - name: next-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-${{ hashFiles('web/app/**', 'web/components/**', 'web/lib/**', 'web/hooks/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+      - name: build
+        run: npm run build
+      - name: web-host
+        run: npm run build:web-host
+      - name: typecheck
+        run: npm run typecheck:extensions
+      - name: validate-pack
+        run: npm run validate-pack
+      - name: unit
+        run: npm run test:unit
+      - name: packages
+        run: npm run test:packages
+      - name: integration
+        id: integration
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tail -25
+      - name: coverage
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: record
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          {
+            echo "job=${{ github.job }}"
+            echo "reader_outcome=${{ steps.reader.outcome }}"
+            echo "integration_outcome=${{ steps.integration.outcome }}"
+            echo "node=$(node --version 2>/dev/null || echo none)"
+            if [ -f /home/runner/reader.log ]; then
+              grep -aE '(ℹ (tests|suites|pass|fail|cancelled|skipped|todo)|^ERROR: Coverage|All files|failing tests|✖ )' /home/runner/reader.log | tail -60
+            fi
+          } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+          if [ -d dist ]; then (find dist packages/*/dist -type f 2>/dev/null | LC_ALL=C sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1) > /home/runner/ni/${{ github.job }}.dist-sha.txt; find dist packages/*/dist -type f 2>/dev/null | wc -l >> /home/runner/ni/${{ github.job }}.dist-sha.txt; fi
+          [ -f /home/runner/reader.log ] && tail -200 /home/runner/reader.log > /home/runner/ni/${{ github.job }}.tail.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  orig-b:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: setup-node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: npm-ci
+        run: npm ci
+      - name: web-ci
+        run: npm --prefix web ci
+      - name: next-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-${{ hashFiles('web/app/**', 'web/components/**', 'web/lib/**', 'web/hooks/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+      - name: build
+        run: npm run build
+      - name: web-host
+        run: npm run build:web-host
+      - name: typecheck
+        run: npm run typecheck:extensions
+      - name: validate-pack
+        run: npm run validate-pack
+      - name: unit
+        run: npm run test:unit
+      - name: packages
+        run: npm run test:packages
+      - name: integration
+        id: integration
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tail -25
+      - name: coverage
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: record
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          {
+            echo "job=${{ github.job }}"
+            echo "reader_outcome=${{ steps.reader.outcome }}"
+            echo "integration_outcome=${{ steps.integration.outcome }}"
+            echo "node=$(node --version 2>/dev/null || echo none)"
+            if [ -f /home/runner/reader.log ]; then
+              grep -aE '(ℹ (tests|suites|pass|fail|cancelled|skipped|todo)|^ERROR: Coverage|All files|failing tests|✖ )' /home/runner/reader.log | tail -60
+            fi
+          } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+          if [ -d dist ]; then (find dist packages/*/dist -type f 2>/dev/null | LC_ALL=C sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1) > /home/runner/ni/${{ github.job }}.dist-sha.txt; find dist packages/*/dist -type f 2>/dev/null | wc -l >> /home/runner/ni/${{ github.job }}.dist-sha.txt; fi
+          [ -f /home/runner/reader.log ] && tail -200 /home/runner/reader.log > /home/runner/ni/${{ github.job }}.tail.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  r1-alone:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: coverage
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: record
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          {
+            echo "job=${{ github.job }}"
+            echo "reader_outcome=${{ steps.reader.outcome }}"
+            echo "integration_outcome=${{ steps.integration.outcome }}"
+            echo "node=$(node --version 2>/dev/null || echo none)"
+            if [ -f /home/runner/reader.log ]; then
+              grep -aE '(ℹ (tests|suites|pass|fail|cancelled|skipped|todo)|^ERROR: Coverage|All files|failing tests|✖ )' /home/runner/reader.log | tail -60
+            fi
+          } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+          if [ -d dist ]; then (find dist packages/*/dist -type f 2>/dev/null | LC_ALL=C sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1) > /home/runner/ni/${{ github.job }}.dist-sha.txt; find dist packages/*/dist -type f 2>/dev/null | wc -l >> /home/runner/ni/${{ github.job }}.dist-sha.txt; fi
+          [ -f /home/runner/reader.log ] && tail -200 /home/runner/reader.log > /home/runner/ni/${{ github.job }}.tail.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  loo-checkout:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: setup-node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: npm-ci
+        run: npm ci
+      - name: web-ci
+        run: npm --prefix web ci
+      - name: next-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-${{ hashFiles('web/app/**', 'web/components/**', 'web/lib/**', 'web/hooks/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+      - name: build
+        run: npm run build
+      - name: web-host
+        run: npm run build:web-host
+      - name: typecheck
+        run: npm run typecheck:extensions
+      - name: validate-pack
+        run: npm run validate-pack
+      - name: unit
+        run: npm run test:unit
+      - name: packages
+        run: npm run test:packages
+      - name: integration
+        id: integration
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tail -25
+      - name: coverage
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: record
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          {
+            echo "job=${{ github.job }}"
+            echo "reader_outcome=${{ steps.reader.outcome }}"
+            echo "integration_outcome=${{ steps.integration.outcome }}"
+            echo "node=$(node --version 2>/dev/null || echo none)"
+            if [ -f /home/runner/reader.log ]; then
+              grep -aE '(ℹ (tests|suites|pass|fail|cancelled|skipped|todo)|^ERROR: Coverage|All files|failing tests|✖ )' /home/runner/reader.log | tail -60
+            fi
+          } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+          if [ -d dist ]; then (find dist packages/*/dist -type f 2>/dev/null | LC_ALL=C sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1) > /home/runner/ni/${{ github.job }}.dist-sha.txt; find dist packages/*/dist -type f 2>/dev/null | wc -l >> /home/runner/ni/${{ github.job }}.dist-sha.txt; fi
+          [ -f /home/runner/reader.log ] && tail -200 /home/runner/reader.log > /home/runner/ni/${{ github.job }}.tail.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  loo-setup-node:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: npm-ci
+        run: npm ci
+      - name: web-ci
+        run: npm --prefix web ci
+      - name: next-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-${{ hashFiles('web/app/**', 'web/components/**', 'web/lib/**', 'web/hooks/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+      - name: build
+        run: npm run build
+      - name: web-host
+        run: npm run build:web-host
+      - name: typecheck
+        run: npm run typecheck:extensions
+      - name: validate-pack
+        run: npm run validate-pack
+      - name: unit
+        run: npm run test:unit
+      - name: packages
+        run: npm run test:packages
+      - name: integration
+        id: integration
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tail -25
+      - name: coverage
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: record
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          {
+            echo "job=${{ github.job }}"
+            echo "reader_outcome=${{ steps.reader.outcome }}"
+            echo "integration_outcome=${{ steps.integration.outcome }}"
+            echo "node=$(node --version 2>/dev/null || echo none)"
+            if [ -f /home/runner/reader.log ]; then
+              grep -aE '(ℹ (tests|suites|pass|fail|cancelled|skipped|todo)|^ERROR: Coverage|All files|failing tests|✖ )' /home/runner/reader.log | tail -60
+            fi
+          } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+          if [ -d dist ]; then (find dist packages/*/dist -type f 2>/dev/null | LC_ALL=C sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1) > /home/runner/ni/${{ github.job }}.dist-sha.txt; find dist packages/*/dist -type f 2>/dev/null | wc -l >> /home/runner/ni/${{ github.job }}.dist-sha.txt; fi
+          [ -f /home/runner/reader.log ] && tail -200 /home/runner/reader.log > /home/runner/ni/${{ github.job }}.tail.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  loo-npm-ci:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: setup-node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: web-ci
+        run: npm --prefix web ci
+      - name: next-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-${{ hashFiles('web/app/**', 'web/components/**', 'web/lib/**', 'web/hooks/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+      - name: build
+        run: npm run build
+      - name: web-host
+        run: npm run build:web-host
+      - name: typecheck
+        run: npm run typecheck:extensions
+      - name: validate-pack
+        run: npm run validate-pack
+      - name: unit
+        run: npm run test:unit
+      - name: packages
+        run: npm run test:packages
+      - name: integration
+        id: integration
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tail -25
+      - name: coverage
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: record
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          {
+            echo "job=${{ github.job }}"
+            echo "reader_outcome=${{ steps.reader.outcome }}"
+            echo "integration_outcome=${{ steps.integration.outcome }}"
+            echo "node=$(node --version 2>/dev/null || echo none)"
+            if [ -f /home/runner/reader.log ]; then
+              grep -aE '(ℹ (tests|suites|pass|fail|cancelled|skipped|todo)|^ERROR: Coverage|All files|failing tests|✖ )' /home/runner/reader.log | tail -60
+            fi
+          } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+          if [ -d dist ]; then (find dist packages/*/dist -type f 2>/dev/null | LC_ALL=C sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1) > /home/runner/ni/${{ github.job }}.dist-sha.txt; find dist packages/*/dist -type f 2>/dev/null | wc -l >> /home/runner/ni/${{ github.job }}.dist-sha.txt; fi
+          [ -f /home/runner/reader.log ] && tail -200 /home/runner/reader.log > /home/runner/ni/${{ github.job }}.tail.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  loo-web-ci:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: setup-node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: npm-ci
+        run: npm ci
+      - name: next-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-${{ hashFiles('web/app/**', 'web/components/**', 'web/lib/**', 'web/hooks/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+      - name: build
+        run: npm run build
+      - name: web-host
+        run: npm run build:web-host
+      - name: typecheck
+        run: npm run typecheck:extensions
+      - name: validate-pack
+        run: npm run validate-pack
+      - name: unit
+        run: npm run test:unit
+      - name: packages
+        run: npm run test:packages
+      - name: integration
+        id: integration
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tail -25
+      - name: coverage
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: record
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          {
+            echo "job=${{ github.job }}"
+            echo "reader_outcome=${{ steps.reader.outcome }}"
+            echo "integration_outcome=${{ steps.integration.outcome }}"
+            echo "node=$(node --version 2>/dev/null || echo none)"
+            if [ -f /home/runner/reader.log ]; then
+              grep -aE '(ℹ (tests|suites|pass|fail|cancelled|skipped|todo)|^ERROR: Coverage|All files|failing tests|✖ )' /home/runner/reader.log | tail -60
+            fi
+          } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+          if [ -d dist ]; then (find dist packages/*/dist -type f 2>/dev/null | LC_ALL=C sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1) > /home/runner/ni/${{ github.job }}.dist-sha.txt; find dist packages/*/dist -type f 2>/dev/null | wc -l >> /home/runner/ni/${{ github.job }}.dist-sha.txt; fi
+          [ -f /home/runner/reader.log ] && tail -200 /home/runner/reader.log > /home/runner/ni/${{ github.job }}.tail.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  loo-next-cache:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: setup-node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: npm-ci
+        run: npm ci
+      - name: web-ci
+        run: npm --prefix web ci
+      - name: build
+        run: npm run build
+      - name: web-host
+        run: npm run build:web-host
+      - name: typecheck
+        run: npm run typecheck:extensions
+      - name: validate-pack
+        run: npm run validate-pack
+      - name: unit
+        run: npm run test:unit
+      - name: packages
+        run: npm run test:packages
+      - name: integration
+        id: integration
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tail -25
+      - name: coverage
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: record
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          {
+            echo "job=${{ github.job }}"
+            echo "reader_outcome=${{ steps.reader.outcome }}"
+            echo "integration_outcome=${{ steps.integration.outcome }}"
+            echo "node=$(node --version 2>/dev/null || echo none)"
+            if [ -f /home/runner/reader.log ]; then
+              grep -aE '(ℹ (tests|suites|pass|fail|cancelled|skipped|todo)|^ERROR: Coverage|All files|failing tests|✖ )' /home/runner/reader.log | tail -60
+            fi
+          } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+          if [ -d dist ]; then (find dist packages/*/dist -type f 2>/dev/null | LC_ALL=C sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1) > /home/runner/ni/${{ github.job }}.dist-sha.txt; find dist packages/*/dist -type f 2>/dev/null | wc -l >> /home/runner/ni/${{ github.job }}.dist-sha.txt; fi
+          [ -f /home/runner/reader.log ] && tail -200 /home/runner/reader.log > /home/runner/ni/${{ github.job }}.tail.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  loo-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: setup-node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: npm-ci
+        run: npm ci
+      - name: web-ci
+        run: npm --prefix web ci
+      - name: next-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-${{ hashFiles('web/app/**', 'web/components/**', 'web/lib/**', 'web/hooks/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+      - name: web-host
+        run: npm run build:web-host
+      - name: typecheck
+        run: npm run typecheck:extensions
+      - name: validate-pack
+        run: npm run validate-pack
+      - name: unit
+        run: npm run test:unit
+      - name: packages
+        run: npm run test:packages
+      - name: integration
+        id: integration
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tail -25
+      - name: coverage
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: record
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          {
+            echo "job=${{ github.job }}"
+            echo "reader_outcome=${{ steps.reader.outcome }}"
+            echo "integration_outcome=${{ steps.integration.outcome }}"
+            echo "node=$(node --version 2>/dev/null || echo none)"
+            if [ -f /home/runner/reader.log ]; then
+              grep -aE '(ℹ (tests|suites|pass|fail|cancelled|skipped|todo)|^ERROR: Coverage|All files|failing tests|✖ )' /home/runner/reader.log | tail -60
+            fi
+          } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+          if [ -d dist ]; then (find dist packages/*/dist -type f 2>/dev/null | LC_ALL=C sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1) > /home/runner/ni/${{ github.job }}.dist-sha.txt; find dist packages/*/dist -type f 2>/dev/null | wc -l >> /home/runner/ni/${{ github.job }}.dist-sha.txt; fi
+          [ -f /home/runner/reader.log ] && tail -200 /home/runner/reader.log > /home/runner/ni/${{ github.job }}.tail.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  loo-web-host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: setup-node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: npm-ci
+        run: npm ci
+      - name: web-ci
+        run: npm --prefix web ci
+      - name: next-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-${{ hashFiles('web/app/**', 'web/components/**', 'web/lib/**', 'web/hooks/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+      - name: build
+        run: npm run build
+      - name: typecheck
+        run: npm run typecheck:extensions
+      - name: validate-pack
+        run: npm run validate-pack
+      - name: unit
+        run: npm run test:unit
+      - name: packages
+        run: npm run test:packages
+      - name: integration
+        id: integration
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tail -25
+      - name: coverage
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: record
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          {
+            echo "job=${{ github.job }}"
+            echo "reader_outcome=${{ steps.reader.outcome }}"
+            echo "integration_outcome=${{ steps.integration.outcome }}"
+            echo "node=$(node --version 2>/dev/null || echo none)"
+            if [ -f /home/runner/reader.log ]; then
+              grep -aE '(ℹ (tests|suites|pass|fail|cancelled|skipped|todo)|^ERROR: Coverage|All files|failing tests|✖ )' /home/runner/reader.log | tail -60
+            fi
+          } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+          if [ -d dist ]; then (find dist packages/*/dist -type f 2>/dev/null | LC_ALL=C sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1) > /home/runner/ni/${{ github.job }}.dist-sha.txt; find dist packages/*/dist -type f 2>/dev/null | wc -l >> /home/runner/ni/${{ github.job }}.dist-sha.txt; fi
+          [ -f /home/runner/reader.log ] && tail -200 /home/runner/reader.log > /home/runner/ni/${{ github.job }}.tail.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  loo-typecheck:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: setup-node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: npm-ci
+        run: npm ci
+      - name: web-ci
+        run: npm --prefix web ci
+      - name: next-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-${{ hashFiles('web/app/**', 'web/components/**', 'web/lib/**', 'web/hooks/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+      - name: build
+        run: npm run build
+      - name: web-host
+        run: npm run build:web-host
+      - name: validate-pack
+        run: npm run validate-pack
+      - name: unit
+        run: npm run test:unit
+      - name: packages
+        run: npm run test:packages
+      - name: integration
+        id: integration
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tail -25
+      - name: coverage
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: record
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          {
+            echo "job=${{ github.job }}"
+            echo "reader_outcome=${{ steps.reader.outcome }}"
+            echo "integration_outcome=${{ steps.integration.outcome }}"
+            echo "node=$(node --version 2>/dev/null || echo none)"
+            if [ -f /home/runner/reader.log ]; then
+              grep -aE '(ℹ (tests|suites|pass|fail|cancelled|skipped|todo)|^ERROR: Coverage|All files|failing tests|✖ )' /home/runner/reader.log | tail -60
+            fi
+          } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+          if [ -d dist ]; then (find dist packages/*/dist -type f 2>/dev/null | LC_ALL=C sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1) > /home/runner/ni/${{ github.job }}.dist-sha.txt; find dist packages/*/dist -type f 2>/dev/null | wc -l >> /home/runner/ni/${{ github.job }}.dist-sha.txt; fi
+          [ -f /home/runner/reader.log ] && tail -200 /home/runner/reader.log > /home/runner/ni/${{ github.job }}.tail.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  loo-validate-pack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: setup-node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: npm-ci
+        run: npm ci
+      - name: web-ci
+        run: npm --prefix web ci
+      - name: next-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-${{ hashFiles('web/app/**', 'web/components/**', 'web/lib/**', 'web/hooks/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+      - name: build
+        run: npm run build
+      - name: web-host
+        run: npm run build:web-host
+      - name: typecheck
+        run: npm run typecheck:extensions
+      - name: unit
+        run: npm run test:unit
+      - name: packages
+        run: npm run test:packages
+      - name: integration
+        id: integration
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tail -25
+      - name: coverage
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: record
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          {
+            echo "job=${{ github.job }}"
+            echo "reader_outcome=${{ steps.reader.outcome }}"
+            echo "integration_outcome=${{ steps.integration.outcome }}"
+            echo "node=$(node --version 2>/dev/null || echo none)"
+            if [ -f /home/runner/reader.log ]; then
+              grep -aE '(ℹ (tests|suites|pass|fail|cancelled|skipped|todo)|^ERROR: Coverage|All files|failing tests|✖ )' /home/runner/reader.log | tail -60
+            fi
+          } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+          if [ -d dist ]; then (find dist packages/*/dist -type f 2>/dev/null | LC_ALL=C sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1) > /home/runner/ni/${{ github.job }}.dist-sha.txt; find dist packages/*/dist -type f 2>/dev/null | wc -l >> /home/runner/ni/${{ github.job }}.dist-sha.txt; fi
+          [ -f /home/runner/reader.log ] && tail -200 /home/runner/reader.log > /home/runner/ni/${{ github.job }}.tail.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  loo-unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: setup-node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: npm-ci
+        run: npm ci
+      - name: web-ci
+        run: npm --prefix web ci
+      - name: next-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-${{ hashFiles('web/app/**', 'web/components/**', 'web/lib/**', 'web/hooks/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+      - name: build
+        run: npm run build
+      - name: web-host
+        run: npm run build:web-host
+      - name: typecheck
+        run: npm run typecheck:extensions
+      - name: validate-pack
+        run: npm run validate-pack
+      - name: packages
+        run: npm run test:packages
+      - name: integration
+        id: integration
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tail -25
+      - name: coverage
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: record
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          {
+            echo "job=${{ github.job }}"
+            echo "reader_outcome=${{ steps.reader.outcome }}"
+            echo "integration_outcome=${{ steps.integration.outcome }}"
+            echo "node=$(node --version 2>/dev/null || echo none)"
+            if [ -f /home/runner/reader.log ]; then
+              grep -aE '(ℹ (tests|suites|pass|fail|cancelled|skipped|todo)|^ERROR: Coverage|All files|failing tests|✖ )' /home/runner/reader.log | tail -60
+            fi
+          } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+          if [ -d dist ]; then (find dist packages/*/dist -type f 2>/dev/null | LC_ALL=C sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1) > /home/runner/ni/${{ github.job }}.dist-sha.txt; find dist packages/*/dist -type f 2>/dev/null | wc -l >> /home/runner/ni/${{ github.job }}.dist-sha.txt; fi
+          [ -f /home/runner/reader.log ] && tail -200 /home/runner/reader.log > /home/runner/ni/${{ github.job }}.tail.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  loo-packages:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: setup-node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: npm-ci
+        run: npm ci
+      - name: web-ci
+        run: npm --prefix web ci
+      - name: next-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-${{ hashFiles('web/app/**', 'web/components/**', 'web/lib/**', 'web/hooks/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+      - name: build
+        run: npm run build
+      - name: web-host
+        run: npm run build:web-host
+      - name: typecheck
+        run: npm run typecheck:extensions
+      - name: validate-pack
+        run: npm run validate-pack
+      - name: unit
+        run: npm run test:unit
+      - name: integration
+        id: integration
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tail -25
+      - name: coverage
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: record
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          {
+            echo "job=${{ github.job }}"
+            echo "reader_outcome=${{ steps.reader.outcome }}"
+            echo "integration_outcome=${{ steps.integration.outcome }}"
+            echo "node=$(node --version 2>/dev/null || echo none)"
+            if [ -f /home/runner/reader.log ]; then
+              grep -aE '(ℹ (tests|suites|pass|fail|cancelled|skipped|todo)|^ERROR: Coverage|All files|failing tests|✖ )' /home/runner/reader.log | tail -60
+            fi
+          } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+          if [ -d dist ]; then (find dist packages/*/dist -type f 2>/dev/null | LC_ALL=C sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1) > /home/runner/ni/${{ github.job }}.dist-sha.txt; find dist packages/*/dist -type f 2>/dev/null | wc -l >> /home/runner/ni/${{ github.job }}.dist-sha.txt; fi
+          [ -f /home/runner/reader.log ] && tail -200 /home/runner/reader.log > /home/runner/ni/${{ github.job }}.tail.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  loo-integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: setup-node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: npm-ci
+        run: npm ci
+      - name: web-ci
+        run: npm --prefix web ci
+      - name: next-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-${{ hashFiles('web/app/**', 'web/components/**', 'web/lib/**', 'web/hooks/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+      - name: build
+        run: npm run build
+      - name: web-host
+        run: npm run build:web-host
+      - name: typecheck
+        run: npm run typecheck:extensions
+      - name: validate-pack
+        run: npm run validate-pack
+      - name: unit
+        run: npm run test:unit
+      - name: packages
+        run: npm run test:packages
+      - name: coverage
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: record
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          {
+            echo "job=${{ github.job }}"
+            echo "reader_outcome=${{ steps.reader.outcome }}"
+            echo "integration_outcome=${{ steps.integration.outcome }}"
+            echo "node=$(node --version 2>/dev/null || echo none)"
+            if [ -f /home/runner/reader.log ]; then
+              grep -aE '(ℹ (tests|suites|pass|fail|cancelled|skipped|todo)|^ERROR: Coverage|All files|failing tests|✖ )' /home/runner/reader.log | tail -60
+            fi
+          } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+          if [ -d dist ]; then (find dist packages/*/dist -type f 2>/dev/null | LC_ALL=C sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1) > /home/runner/ni/${{ github.job }}.dist-sha.txt; find dist packages/*/dist -type f 2>/dev/null | wc -l >> /home/runner/ni/${{ github.job }}.dist-sha.txt; fi
+          [ -f /home/runner/reader.log ] && tail -200 /home/runner/reader.log > /home/runner/ni/${{ github.job }}.tail.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  cand-5:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: setup-node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: npm-ci
+        run: npm ci
+      - name: web-ci
+        run: npm --prefix web ci
+      - name: build
+        run: npm run build
+      - name: coverage
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: record
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          {
+            echo "job=${{ github.job }}"
+            echo "reader_outcome=${{ steps.reader.outcome }}"
+            echo "integration_outcome=${{ steps.integration.outcome }}"
+            echo "node=$(node --version 2>/dev/null || echo none)"
+            if [ -f /home/runner/reader.log ]; then
+              grep -aE '(ℹ (tests|suites|pass|fail|cancelled|skipped|todo)|^ERROR: Coverage|All files|failing tests|✖ )' /home/runner/reader.log | tail -60
+            fi
+          } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+          if [ -d dist ]; then (find dist packages/*/dist -type f 2>/dev/null | LC_ALL=C sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1) > /home/runner/ni/${{ github.job }}.dist-sha.txt; find dist packages/*/dist -type f 2>/dev/null | wc -l >> /home/runner/ni/${{ github.job }}.dist-sha.txt; fi
+          [ -f /home/runner/reader.log ] && tail -200 /home/runner/reader.log > /home/runner/ni/${{ github.job }}.tail.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  cand-noweb:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: setup-node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: npm-ci
+        run: npm ci
+      - name: build
+        run: npm run build
+      - name: coverage
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: record
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          {
+            echo "job=${{ github.job }}"
+            echo "reader_outcome=${{ steps.reader.outcome }}"
+            echo "integration_outcome=${{ steps.integration.outcome }}"
+            echo "node=$(node --version 2>/dev/null || echo none)"
+            if [ -f /home/runner/reader.log ]; then
+              grep -aE '(ℹ (tests|suites|pass|fail|cancelled|skipped|todo)|^ERROR: Coverage|All files|failing tests|✖ )' /home/runner/reader.log | tail -60
+            fi
+          } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+          if [ -d dist ]; then (find dist packages/*/dist -type f 2>/dev/null | LC_ALL=C sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1) > /home/runner/ni/${{ github.job }}.dist-sha.txt; find dist packages/*/dist -type f 2>/dev/null | wc -l >> /home/runner/ni/${{ github.job }}.dist-sha.txt; fi
+          [ -f /home/runner/reader.log ] && tail -200 /home/runner/reader.log > /home/runner/ni/${{ github.job }}.tail.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  cand-nonode:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: npm-ci
+        run: npm ci
+      - name: web-ci
+        run: npm --prefix web ci
+      - name: build
+        run: npm run build
+      - name: coverage
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: record
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          {
+            echo "job=${{ github.job }}"
+            echo "reader_outcome=${{ steps.reader.outcome }}"
+            echo "integration_outcome=${{ steps.integration.outcome }}"
+            echo "node=$(node --version 2>/dev/null || echo none)"
+            if [ -f /home/runner/reader.log ]; then
+              grep -aE '(ℹ (tests|suites|pass|fail|cancelled|skipped|todo)|^ERROR: Coverage|All files|failing tests|✖ )' /home/runner/reader.log | tail -60
+            fi
+          } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+          if [ -d dist ]; then (find dist packages/*/dist -type f 2>/dev/null | LC_ALL=C sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1) > /home/runner/ni/${{ github.job }}.dist-sha.txt; find dist packages/*/dist -type f 2>/dev/null | wc -l >> /home/runner/ni/${{ github.job }}.dist-sha.txt; fi
+          [ -f /home/runner/reader.log ] && tail -200 /home/runner/reader.log > /home/runner/ni/${{ github.job }}.tail.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  cand-noweb-nonode:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: npm-ci
+        run: npm ci
+      - name: build
+        run: npm run build
+      - name: coverage
+        id: reader
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee /home/runner/reader.log
+      - name: record
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          {
+            echo "job=${{ github.job }}"
+            echo "reader_outcome=${{ steps.reader.outcome }}"
+            echo "integration_outcome=${{ steps.integration.outcome }}"
+            echo "node=$(node --version 2>/dev/null || echo none)"
+            if [ -f /home/runner/reader.log ]; then
+              grep -aE '(ℹ (tests|suites|pass|fail|cancelled|skipped|todo)|^ERROR: Coverage|All files|failing tests|✖ )' /home/runner/reader.log | tail -60
+            fi
+          } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+          if [ -d dist ]; then (find dist packages/*/dist -type f 2>/dev/null | LC_ALL=C sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1) > /home/runner/ni/${{ github.job }}.dist-sha.txt; find dist packages/*/dist -type f 2>/dev/null | wc -l >> /home/runner/ni/${{ github.job }}.dist-sha.txt; fi
+          [ -f /home/runner/reader.log ] && tail -200 /home/runner/reader.log > /home/runner/ni/${{ github.job }}.tail.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
+  ghav-m1:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: setup-node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: npm-ci
+        run: npm ci
+      - name: web-ci
+        run: npm --prefix web ci
+      - name: next-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-${{ hashFiles('web/app/**', 'web/components/**', 'web/lib/**', 'web/hooks/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}-
+            nextjs-${{ runner.os }}-
+      - name: build
+        run: npm run build
+      - name: web-host
+        run: npm run build:web-host
+      - name: typecheck
+        run: npm run typecheck:extensions
+      - name: validate-pack
+        run: npm run validate-pack
+      - name: unit
+        run: npm run test:unit
+      - name: packages
+        run: npm run test:packages
+      - name: integration
+        id: integration
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tail -25
+      - name: record
+        if: always()
+        run: |
+          mkdir -p /home/runner/ni
+          {
+            echo "job=${{ github.job }}"
+            echo "reader_outcome=${{ steps.reader.outcome }}"
+            echo "integration_outcome=${{ steps.integration.outcome }}"
+            echo "node=$(node --version 2>/dev/null || echo none)"
+            if [ -f /home/runner/reader.log ]; then
+              grep -aE '(ℹ (tests|suites|pass|fail|cancelled|skipped|todo)|^ERROR: Coverage|All files|failing tests|✖ )' /home/runner/reader.log | tail -60
+            fi
+          } > /home/runner/ni/${{ github.job }}.txt
+          cat /home/runner/ni/${{ github.job }}.txt
+          if [ -d dist ]; then (find dist packages/*/dist -type f 2>/dev/null | LC_ALL=C sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1) > /home/runner/ni/${{ github.job }}.dist-sha.txt; find dist packages/*/dist -type f 2>/dev/null | wc -l >> /home/runner/ni/${{ github.job }}.dist-sha.txt; fi
+          [ -f /home/runner/reader.log ] && tail -200 /home/runner/reader.log > /home/runner/ni/${{ github.job }}.tail.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ni-${{ github.job }}
+          path: /home/runner/ni/
+
